@@ -1,0 +1,283 @@
+         TITLE '   C B U F   '
+************************************************************
+*                                                          *
+*        'CBUF' TSO COMMAND                                *
+*                                                          *
+************************************************************
+         SPACE
+* SHOW THE VALUES OF THE 2 HALFWORDS POINTED TO BY CPPLCBUF.
+* THE FIRST IS THE LENGTH+4 OF THE TEXT AT OFFSET 4.
+* THE SECOND IS THE OFFSET FROM THE FIRST BYTE OF TEXT
+* TO THE FIRST OPERAND, OR IF THERE IS NO OPERAND, THE
+* OFFSET TO THE BYTE FOLLOWING THE TEXT, JUST BEYOND THE END
+* OF THE CBUF.
+         SPACE
+* INTERCEPT 'LINK' MACROS IMBEDDED IN PUTLINE & STACK
+* TO MAKE SF=(E,LINKAREA) THE DEFAULT.
+         MACRO
+&NAME    LINK  &EP=,&SF=(E,LINKAREA)
+&NAME    LA    15,&SF(2)
+         LA    0,*+8
+         B     *+12
+         DC    CL8'&EP'
+         ST    0,0(0,15)
+         SVC   6             ISSUE LINK SVC
+         MEND
+         SPACE
+CBUF     START
+         USING *,R12,R11
+         B     @PROLOG-*(,R15)
+         DC    AL1(7),CL7'CBUF'
+         DC    CL16' &SYSDATE &SYSTIME '
+@SIZE    DC    0F'0',AL1(1),AL3(@DATA24L)
+@PROLOG  STM   14,12,12(R13)
+         LR    R12,R15             BASE
+         LA    R15,1
+         LA    R11,4095(R15,R12)   BASE
+         LR    R2,R1
+         USING CPPL,R2
+         L     R0,@SIZE
+         GETMAIN R,LV=(0)
+         LR    R9,R1
+         USING @DATA24,R9
+         ST    R13,4(,R1)          CHAIN SAVEAREA
+         ST    R1,8(,R13)          CHAIN SAVEAREA
+         LR    R13,R1              NEW SAVEAREA
+         SPACE
+         XC    LINKAREA(8),LINKAREA
+         LA    R15,12
+         STH   R15,RETCODE         SET RETCODE = 12
+         TM    0(R2),X'80'         IF INVOKED BY CALL
+         BO    EXITR                 EXIT IMMEDIATELY
+         SPACE
+************************************************************
+*                                                          *
+*        SET UP IOPL FOR PUTLINE                           *
+*                                                          *
+************************************************************
+         SPACE
+         LA    R15,MYIOPL
+         USING IOPL,R15
+         MVC   IOPLUPT(4),CPPLUPT
+         MVC   IOPLECT(4),CPPLECT
+         LA    R0,MYECB
+         ST    R0,IOPLECB
+         XC    MYECB,MYECB
+         LA    R0,MYPTPB
+         ST    R0,IOPLIOPB
+         DROP  R15                 IOPL
+         SPACE
+         L     R15,16              LOAD CVT POINTER
+         TM    444(R15),X'80'      IS PUTLINE LOADED? (VS2)
+         BNO   PUTLOAD             NO - BRANCH TO LOAD
+         L     R15,444(,R15)       YES - USE CVTPUTL
+         B     PUTLOADX            BRANCH AROUND LOAD
+PUTLOAD  LA    R0,=CL8'IKJPUTL '
+         LOAD  EPLOC=(0)
+         LR    R15,R0              GET ENTRY ADDRESS
+         LA    R15,0(,R15)         CLEAR HI BYTE FOR DELETE ROUTINE
+PUTLOADX ST    R15,MYPUTLEP        SAVE PUTLINE ENTRY ADDRESS
+         SPACE
+************************************************************
+*                                                          *
+*        SHOW THE CBUF HALFWORDS                           *
+*                                                          *
+************************************************************
+         SPACE
+         L     R3,CPPLCBUF
+         LR    R1,R3
+         LA    R0,2                NUMBER OF BYTES
+         LA    R15,TBUF
+         BAL   R14,TOHEX1
+         LA    R15,1(,R15)
+         LA    R0,2                NUMBER OF BYTES
+         BAL   R14,TOHEX1
+         LA    R15,1(,R15)
+         LH    R0,0(,R3)           GET LENGTH
+         SH    R0,=H'4'            MINUS 4
+         LTR   R0,R0
+         BNP   NOTEXT
+         BAL   R14,TOHEX1
+NOTEXT   EQU   *
+         LA    R1,TBUF
+         LR    R0,R15              POINT PAST LAST BYTE
+         SR    R0,R1               COMPUTE LENGTH
+         BAL   R14,PUTLINE
+         SPACE
+         MVI   RETCODE+1,0
+         B     CLEANUP
+         SPACE
+************************************************************
+*                                                          *
+*        SUBROUTINES                                       *
+*                                                          *
+************************************************************
+         SPACE
+TOHEX1   MVC   1(1,R15),0(R1)
+         UNPK  0(3,R15),1(2,R15)
+         TR    0(2,R15),HEXTAB-240
+         LA    R15,2(,R15)
+         LA    R1,1(,R1)
+         BCT   R0,TOHEX1
+         MVI   0(R15),C' '
+         BR    R14
+         SPACE
+TOHEX4   MVC   1(4,R15),0(R1)
+         UNPK  0(9,R15),1(5,R15)
+         TR    0(8,R15),HEXTAB-240
+         MVI   8(R15),C' '
+         LA    R15,9(,R15)
+         LA    R1,4(,R1)
+         BCT   R0,TOHEX4
+         BR    R14
+         SPACE
+************************************************************
+*                                                          *
+*        PUTMSG ROUTINE                                    *
+*                                                          *
+************************************************************
+         SPACE
+PUTMSG   STM   R14,R1,PUTLINS
+         XC    MYOLD(8),MYOLD
+         XC    MYSEG1(4),MYSEG1
+         MVC   MYPTPB(12),MODLPTPM
+         LA    R14,1               NO. OF MESSAGE SEGMENTS
+         ST    R14,MYOLD
+         LA    R14,MYSEG1          POINT TO 1ST SEGMENT
+         ST    R14,MYOLD+4
+         LR    R14,R0              LENGTH IN R0
+         LA    R14,4(,R14)         ADD 4
+         LA    R15,MYSEG1+4
+         CLC   0(3,R1),=C'IKJ'     IS DATA PRECEEDED BY MESSAGE ID?
+         BE    *+16                YES - BRANCH
+         LA    R14,1(,R14)         ADD 1 TO LENGTH
+         MVI   0(R15),C' '         INSERT LEADING BLANK
+         LA    R15,1(,R15)         BUMP POINTER
+         STH   R14,MYSEG1
+         LR    R14,R0
+         BCTR  R14,0
+         B     *+10
+         MVC   0(0,R15),0(R1)      MOVE MESSAGE IN
+         EX    R14,*-6
+         L     R15,MYPUTLEP
+         SPACE
+         PUTLINE PARM=MYPTPB,OUTPUT=(MYOLD),ENTRY=(15),MF=(E,MYIOPL)
+         SPACE
+         LM    R14,R1,PUTLINS
+         BR    R14
+         SPACE
+************************************************************
+*                                                          *
+*        PUTLINE ROUTINE                                   *
+*                                                          *
+************************************************************
+         SPACE
+PUTLINE  STM   R14,R1,PUTLINS
+         XC    MYSEG1(4),MYSEG1
+         MVC   MYPTPB(12),MODLPTPB
+         LR    R14,R0              LENGTH IN R0
+         LA    R14,4(,R14)         ADD 4
+         STH   R14,MYSEG1
+         LR    R14,R0
+         BCTR  R14,0
+         B     *+10
+         MVC   MYSEG1+4(0),0(R1)   MOVE TEXT IN
+         EX    R14,*-6
+         LA    R1,MYIOPL
+         L     R15,MYPUTLEP
+         SPACE
+         PUTLINE PARM=MYPTPB,OUTPUT=(MYSEG1,DATA),ENTRY=(15),MF=(E,(1))
+         SPACE
+         LM    R14,R1,PUTLINS
+         BR    R14
+         SPACE
+************************************************************
+*                                                          *
+*        TERMINATE                                         *
+*                                                          *
+************************************************************
+         SPACE
+CLEANUP  EQU   *
+         CLI   RETCODE+1,0         IS RETCODE ZERO?
+         BZ    STACKDX             YES, BRANCH
+         MVC   MYSTPB(STACKDL),STACKD
+         SPACE
+         STACK DELETE=ALL,PARM=MYSTPB,MF=(E,MYIOPL)
+         SPACE
+         TCLEARQ
+STACKDX  EQU   *
+         SPACE
+EXITR    LH    R2,RETCODE
+         SPACE
+EXIT     LR    R1,R13
+         L     R0,@SIZE
+         L     R13,4(,R13)
+         FREEMAIN R,A=(1),LV=(0)
+         LR    R15,R2
+         LM    0,12,20(R13)
+         L     R14,12(,R13)
+         BR    R14
+         SPACE
+************************************************************
+*                                                          *
+*        CONSTANTS                                         *
+*                                                          *
+************************************************************
+         SPACE
+MODLPTPM PUTLINE OUTPUT=(1,TERM,SINGLE,INFOR),                         X
+               TERMPUT=(EDIT,WAIT,NOHOLD,NOBREAK),MF=L
+         SPACE
+MODLPTPB PUTLINE OUTPUT=(1,TERM,SINGLE,DATA),                          X
+               TERMPUT=(EDIT,WAIT,NOHOLD,NOBREAK),MF=L
+         SPACE
+STACKD   STACK DELETE=ALL,MF=L
+STACKDL  EQU   *-STACKD
+         SPACE
+HEXTAB   DC    C'0123456789ABCDEF'
+         LTORG
+         SPACE
+************************************************************
+*                                                          *
+*        DSECTS                                            *
+*                                                          *
+************************************************************
+         SPACE
+@DATA24  DSECT
+         DS    18F                 REGISTER SAVEAREA
+LINKAREA DS    2F
+MYECB    DS    F                  USED BY PUTLINE ROUTINE
+MYIOPL   DS    4F                 USED BY PUTLINE ROUTINE
+MYPTPB   DS    3F                 USED BY PUTLINE ROUTINE
+MYOLD    DS    2F                 USED BY PUTLINE ROUTINE
+MYSEG1   DS    2H,CL256           USED BY PUTLINE ROUTINE
+PUTLINS  DS    4F                 USED BY PUTLINE ROUTINE
+MYPUTLEP DS    F                  ADDRESS OF IKJPUTL
+MYSTPB   DS    0F                 5 WORDS USED BY STACK DELETE
+TBUF     DS    CL80
+RETCODE  DS    H
+         DS    0D
+@DATA24L EQU   *-@DATA24
+         SPACE
+         IKJCPPL
+         SPACE
+         IKJUPT
+         SPACE
+         IKJIOPL
+         SPACE
+R0       EQU   0
+R1       EQU   1
+R2       EQU   2
+R3       EQU   3
+R4       EQU   4
+R5       EQU   5
+R6       EQU   6
+R7       EQU   7
+R8       EQU   8
+R9       EQU   9
+R10      EQU   10
+R11      EQU   11
+R12      EQU   12
+R13      EQU   13
+R14      EQU   14
+R15      EQU   15
+         END

@@ -1,0 +1,135 @@
+)F FUNCTION -
+
+  THE LISTMOD COMMAND PROVIDES A VERY CONVENIENT AND EASY
+  WAY TO VIEW CODE IN A LOAD MODULE.  IT WORKS FOR PDS AND PDSE
+  LOAD MODULES.
+
+  MODULES IN THE LPA WILL HAVE THE ADDRESS OF THE LPDE DISPLAYED.
+
+  THE LISTMOD AND LISTMODD PROGRAMS SHOW YOU WHAT IS IN A
+  LOAD MODULE, AND THESE TSO COMMANDS MAY BE DIRECTED TO
+  ANY GIVEN PDS (LOAD LIBRARY) BY ALLOCATING THE TASKLIB DD
+  NAME TO THAT LOAD LIBRARY.
+
+  The LISTMOD display is very convenient - see below.
+  (You can detect the presence of zaps very easily, if you
+  know where they are.)
+
+  Since the output of LISTMOD might be quite large, it is
+  suggested to capture its output using one of the commands:
+  TSOV, TSOE, TSOB, or TSOR.
+
+  An example:   TSO TSOV LISTMOD loadmod
+
+  The difference between LISTMOD and LISTMODD is that LISTMOD
+  displays the load module in hexadecimal displacements,
+  with a display 75 bytes wide (OK with an 80-byte terminal),
+  whereas LISTMODD (display 112 bytes wide) does the display
+  in decimal.  LISTMOD is probably the only program you will
+  need.  The only reason why LISTMODD is there, is that it was
+  developed first, and I didn't want to throw it away.
+
+)X SYNTAX  -
+
+    LISTMOD  modname | ENTRY
+    LISTMODD modname | HEX
+                     | NOHEX
+
+)O OPERANDS -
+))HEX        - DISPLAY THE ENTIRE TEXT OF THE LOAD MODULE, EVEN
+               IF IT IS A PDSE.
+
+))ENTRY      - START DISPLAYING FROM THE ENTRY POINT ONWARD,
+               UNTIL THE END OF THE MODULE.
+
+))NOHEX      - JUST DISPLAY THE HEADERS WHICH TELL YOU WHERE
+               THE MODULE WAS LOADED.
+
+
+Please note the remarks.  They are very important.
+
+Remarks:  1. The LISTMOD program (by default) does a LOAD of the
+             load module and then displays the contents of the
+             load module from beginning to end, unless you use
+             the ENTRY keyword, when the display will go from the
+             entry point of the module until the end of the module.
+
+          2. If you allocate a TASKLIB DD name pointing to a load
+             library, the LISTMOD program will search the TASKLIB
+             library ahead of LPA.  Otherwise, LPA comes first, and
+             that is followed by whichever search order the system
+             uses.
+
+          3. The output from LISTMOD might be very long, since
+             LISTMOD displays the entire load module in hex.
+             Therefore, it is extremely advisable to prefix the
+             call to the LISTMOD module with a program that traps
+             output, such as TSOV, TSOE, TSOB, or TSOR.  The
+             execution would be:  TSO TSOV LISTMOD loadmod
+
+Example:
+
+Loaded Program Name:  IKJEFLA1
+-----------------------------------------------------------------
+Module is from LPA.  LPDE Address: 80CD57D0
+Length of loaded module Hex:  00025DC8    Decimal:      155080
+Length after entry address :  00025DC8    Decimal:      155080
+Displacement of entry point:  00000000    Decimal:           0
+-----------------------------------------------------------------
+
+ 00  IKJEFLA1:LOGON INITIALIZATION 19308 HTE77D0         0 W  E    00000000
+4FF32CDDCCDCF7DDCDD4CDCECCDCECECDD4FFFFF4CECFFCF1C1A13144F0E50CE
+7000B92156311A36765095939139913965019308083577408F8F81801006805C
+0---+---+---+---1---+---+---+---2---+---+---+---3---+---+---+---
+
+ 0{     i0    {           &}      K        - %&- h  &-             00000040
+4FC400108F00BFC411071B11105DB01F1DD0B4101A56A656B81656AB10114110
+700800209008FD04B1A881838400048A8B23080081800C000876000070711000
+0---+---+---+---1---+---+---+---2---+---+---+---3---+---+---+---
+
+    o   o                     a*  a      -   i  k   m"   0{6 Zi\   00000080
+001298B198B1580158805880588B588557844900567048B1908097B14FCF1E8E
+AA72601060118000800080048004801C80101002800C191220004F1270068990
+0---+---+---+---1---+---+---+---2---+---+---+---3---+---+---+---
+
+    -   G N   0   {U i  k   o    0{2  -& h  {2o    --&j     {      000000C0
+0058614FC9D080F047CE48B19F8098B14FCF58651847CF98B1566598B148CB16
+0380001E70570400700419122F00601270028000287002601280001012700C76
+0---+---+---+---1---+---+---+---2---+---+---+---3---+---+---+---
+
+The entire display is over 12000 lines long.
+
+And having allocated a TASKLIB:  Now we look at a CDE instead
+of an LPDE:
+
+Loaded Program Name:  IKJEFLA1
+-----------------------------------------------------------------
+Module has been LOADED. CDE Address: 008A47D8
+Length of loaded module Hex:  00025D80    Decimal:      155008
+Length after entry address :  00025D80    Decimal:      155008
+Displacement of entry point:  00000000    Decimal:           0
+-----------------------------------------------------------------
+
+ 00  IKJEFLA1:LOGON INITIALIZATION 23082 HTE77E0         0 W  E    00000000
+4FF32CDDCCDCF7DDCDD4CDCECCDCECECDD4FFFFF4CECFFCF1C1A13144F0E50CE
+7000B92156311A36765095939139913965023082083577508F8F81801006805C
+0---+---+---+---1---+---+---+---2---+---+---+---3---+---+---+---
+
+ 0{     i0    {           &}      K        - %&- h  &-             00000040
+4FC400108F00BFC411071B11105DB01F1DD0B4101A56A656B81656AB10114110
+700800209008FD04B1A881838400048A8B23080081800C000876000070711000
+0---+---+---+---1---+---+---+---2---+---+---+---3---+---+---+---
+
+    o   o                     a*  a      -   i  k   m"   0{6 Zi\   00000080
+001298B198B1580158805880588B588557844900567048B1908097B14FCF1E8E
+AA72601060118000800080048004801C80101002800C191220004F1270068990
+0---+---+---+---1---+---+---+---2---+---+---+---3---+---+---+---
+
+    -   G N   0   {U i  k   o    0{2  -& h  {2o    --&j     {      000000C0
+0058614FC9D080F047CE48B19F8098B14FCF58651847CF98B1566598B148CB16
+0380001E70570400700419122F00601270028000287002601280001012700C76
+0---+---+---+---1---+---+---+---2---+---+---+---3---+---+---+---
+
+        (etc.  Similar display of over 12000 lines...)
+
+
